@@ -1,4 +1,4 @@
-FROM golang:1.17-alpine AS build_deps
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS build_deps
 
 RUN apk add --no-cache git
 
@@ -13,12 +13,19 @@ FROM build_deps AS build
 
 COPY . .
 
-RUN CGO_ENABLED=0 go build -o webhook -ldflags '-w -extldflags "-static"' .
+ARG TARGETOS
+ARG TARGETARCH
 
-FROM alpine:3.9
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go build -o webhook -ldflags '-w -extldflags "-static"' .
 
-RUN apk add --no-cache ca-certificates
+FROM alpine:3.24
+
+RUN apk add --no-cache ca-certificates && \
+    adduser -D -u 65532 nonroot
 
 COPY --from=build /workspace/webhook /usr/local/bin/webhook
+
+USER nonroot:nonroot
 
 ENTRYPOINT ["webhook"]
